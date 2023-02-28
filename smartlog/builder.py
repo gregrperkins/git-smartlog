@@ -1,9 +1,10 @@
 import logging
+import re
 from time import time
 from git import Repo
 
 logger = logging.getLogger("builder")
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.DEBUG)
 
 class TreeBuilder:
     """
@@ -66,9 +67,18 @@ class TreeBuilder:
         last_node = None
         c = commit
         while c != lca_commit:
-            if len(c.parents) > 1:
-                logger.error("Merged commits are not supported!")
-                return                 
+            logger.debug("Commit {} vs {}".format(c, lca_commit))
+            if len(c.parents) == 1:
+                parent = c.parents[0]
+                logger.debug("Non-merge commit {} -> {}".format(c, parent))
+            elif len(c.parents) > 2:
+                logger.error("Merged commits with >2 parents are not supported! ({} Parents)".format(len(c.parents)))
+                return
+            elif len(c.parents) == 2:
+                parent = self._get_merge_destination_parent(c)
+                logger.debug("Merge commit detected; choosing parent {}".format(parent))
+                # return
+
             node = self.node_lookup.get(c)
             if node is None:
                 node = TreeNode(c)
@@ -82,7 +92,7 @@ class TreeBuilder:
                 break
 
             last_node = node
-            c = c.parents[0]
+            c = parent
 
         # Map the LCA commit into a new node if needed and insert in the tree
         lca_node = self.node_lookup.get(lca_commit)
@@ -97,7 +107,27 @@ class TreeBuilder:
 
     def _get_lca_commit(self, c1, c2):        
         commits = self.repo.merge_base(c1, c2)
-        return commits[0] if len(commits) == 1 else None
+        if len(commits) > 1:
+            logger.error("Error in _get_lca_commit -- how can merge_base return multiple commits?")
+            return None
+        elif len(commits) == 0:
+            return None
+
+        result = commits[0]
+        if len(result.parents) > 1:
+            logger.debug("merge_base gave a merge commit as the base -- need to skip")
+            return self._get_merge_destination_parent(c1, result)
+        return result
+
+    def _get_merge_destination_parent(self, merge_c):
+        if len(merge_c.parents) != 2:
+            logger.error("Merged commits with >2 parents are not supported! ({} Parents)".format(len(merge_c.parents)))
+            return None
+        match = re.match(r"Merge branch '([^']*)' into .*", merge_c.message)
+        incoming_c_head = self.repo.heads[match[1]]
+        result = next(pc for pc in merge_c.parents if self._get_lca_commit(incoming_c_head, pc) != pc)
+        logger.debug("Merge commit detected: Incoming branch = {} (currently {}); choosing parent {}".format(match[1], incoming_c_head.commit, result))
+        return result
 
     def _get_lca_node(self, node1, node2):
         commit = self._get_lca_commit(node1.commit, node2.commit)
