@@ -14,7 +14,7 @@ CONFIG_FNAME = "smartlog"
 logging.basicConfig()
 
 logger = logging.getLogger("smartlog")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Git Smartlog")

@@ -4,7 +4,7 @@ from time import time
 from git import Repo
 
 logger = logging.getLogger("builder")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 
 class TreeBuilder:
     """
@@ -77,7 +77,12 @@ class TreeBuilder:
             elif len(c.parents) == 2:
                 parent = self._get_merge_destination_parent(c)
                 logger.debug("Merge commit detected; choosing parent {}".format(parent))
-                # return
+                if lca_commit in c.parents:
+                    # This is the https://stackoverflow.com/questions/48794315/git-merge-base-not-working-on-merged-branch
+                    prior = lca_commit
+                    lca_commit = self._get_lca_commit(parent, self.master_commit)
+                    logger.debug("Merge_base destination was part of a merge commit, thus isn't the first ancestor... " +
+                        "Continuing from {} through {} to {}".format(prior, parent, lca_commit))
 
             node = self.node_lookup.get(c)
             if node is None:
@@ -107,17 +112,7 @@ class TreeBuilder:
 
     def _get_lca_commit(self, c1, c2):        
         commits = self.repo.merge_base(c1, c2)
-        if len(commits) > 1:
-            logger.error("Error in _get_lca_commit -- how can merge_base return multiple commits?")
-            return None
-        elif len(commits) == 0:
-            return None
-
-        result = commits[0]
-        if len(result.parents) > 1:
-            logger.debug("merge_base gave a merge commit as the base -- need to skip")
-            return self._get_merge_destination_parent(c1, result)
-        return result
+        return commits[0] if len(commits) == 1 else None
 
     def _get_merge_destination_parent(self, merge_c):
         if len(merge_c.parents) != 2:
