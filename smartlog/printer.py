@@ -136,7 +136,9 @@ class TreeNodePrinter:
         if self.refmap is not None:
             refs = self.refmap.get(node.commit)
             if len(refs) > 0:
-                line += Fore.GREEN + "(" + ", ".join(refs) + ")  " + Fore.RESET
+                refstrings = [(Fore.CYAN + ref) if ref.startswith('origin/') else (Fore.MAGENTA + ref) if ref.startswith('HEAD') else (Fore.GREEN + ref) for ref in refs]
+                refstrings.sort()
+                line += Fore.GREEN + "(" + ", ".join(refstrings) + Fore.GREEN + ")  " + Fore.RESET
 
         # Add the commit date as a relative string
         line += self.format_commit_date(node.commit.committed_date) + "  "
